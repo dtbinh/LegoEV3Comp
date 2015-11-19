@@ -8,8 +8,10 @@ import lejos.hardware.lcd.LCD;
 import lejos.hardware.motor.Motor;
 import lejos.hardware.port.SensorPort;
 import lejos.hardware.sensor.EV3IRSensor;
+import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.robotics.RegulatedMotor;
 import lejos.robotics.SampleProvider;
+import lejos.robotics.filter.MeanFilter;
 import lejos.robotics.subsumption.Arbitrator;
 import lejos.robotics.subsumption.Behavior;
 
@@ -29,7 +31,8 @@ public class EV3BumperCar
     //static RegulatedMotor rightMotor = MirrorMotor.invertMotor(Motor.B);
     static RegulatedMotor leftMotor = Motor.B;
     static RegulatedMotor rightMotor = Motor.C;
-    static IRSensor sensor;
+//    static IRSensor sensor;
+    static UltrasonicSensor sonar;
   
   // Use these definitions instead if your motors are inverted
   // static RegulatedMotor leftMotor = MirrorMotor.invertMotor(Motor.A);
@@ -71,62 +74,117 @@ public class EV3BumperCar
 		if(Button.ESCAPE.isDown()) System.exit(0);
 		g.clear();
   }
-    
+  
   public static void main(String[] args)
   {
-	  introMessage();
+	    
 	  
-      leftMotor.resetTachoCount();
-      rightMotor.resetTachoCount();
-    leftMotor.rotateTo(0);
-    rightMotor.rotateTo(0);
-    leftMotor.setSpeed(400);
-    rightMotor.setSpeed(400);
-    leftMotor.setAcceleration(800);
-    rightMotor.setAcceleration(800);
-    sensor = new IRSensor();
-    sensor.setDaemon(true);
-    sensor.start();
-    Behavior b1 = new DriveForward();
-    Behavior b2 = new DetectWall();
-    Behavior[] behaviorList =
-    {
-      b1, b2
-    };
-    Arbitrator arbitrator = new Arbitrator(behaviorList);
-    LCD.drawString("Bumper Car",0,1);
-    Button.LEDPattern(6);
-    Button.waitForAnyPress();
-    arbitrator.go();
+	  	leftMotor.resetTachoCount();
+	    rightMotor.resetTachoCount();
+	    leftMotor.rotateTo(0);
+		rightMotor.rotateTo(0);	
+		
+		leftMotor.setSpeed(400);
+	    rightMotor.setSpeed(400);
+	    leftMotor.setAcceleration(800);
+	    rightMotor.setAcceleration(800);
+	      
+	    sonar = new UltrasonicSensor();
+	    sonar.setDaemon(true);
+	    sonar.start();
+	    
+	    Behavior b1 = new DriveForward();
+	    Behavior b2 = new DetectWall();
+	    Behavior[] behaviorList =
+	    {
+	      b1, b2
+	    };
+	    Arbitrator arbitrator = new Arbitrator(behaviorList);
+	    LCD.drawString("Bumper Car",0,1);
+	    Button.LEDPattern(6);
+	    Button.waitForAnyPress();
+	    arbitrator.go();
   }
+    
+//  public static void main2(String[] args)
+//  {
+//	  
+//    leftMotor.resetTachoCount();
+//    rightMotor.resetTachoCount();
+//    leftMotor.rotateTo(0);
+//    rightMotor.rotateTo(0);
+//    leftMotor.setSpeed(400);
+//    rightMotor.setSpeed(400);
+//    leftMotor.setAcceleration(800);
+//    rightMotor.setAcceleration(800);
+//    sensor = new IRSensor();
+//    sensor.setDaemon(true);
+//    sensor.start();
+//    Behavior b1 = new DriveForward();
+//    Behavior b2 = new DetectWall();
+//    Behavior[] behaviorList =
+//    {
+//      b1, b2
+//    };
+//    Arbitrator arbitrator = new Arbitrator(behaviorList);
+//    LCD.drawString("Bumper Car",0,1);
+//    Button.LEDPattern(6);
+//    Button.waitForAnyPress();
+//    arbitrator.go();
+//  }
 }
 
-class IRSensor extends Thread
+class UltrasonicSensor extends Thread
 {
-    EV3IRSensor ir = new EV3IRSensor(SensorPort.S4);
-    SampleProvider sp = ir.getDistanceMode();
+	EV3UltrasonicSensor uSensor = new EV3UltrasonicSensor(SensorPort.S4);
+    SampleProvider sampleProvider = uSensor.getDistanceMode();
+    SampleProvider average = new MeanFilter(sampleProvider, 5);
     public int control = 0;
-    public int distance = 255;
+    public float distance = 255;
 
-    IRSensor()
+    UltrasonicSensor()
     {
 
     }
     
     public void run()
     {
+    	float [] sample = new float[average.sampleSize()];
         while (true)
         {
-            float [] sample = new float[sp.sampleSize()];
-            control = ir.getRemoteCommand(0);
-            sp.fetchSample(sample, 0);
-            distance = (int)sample[0];
+        	average.fetchSample(sample, 0);
+            distance = (float)sample[0];
             System.out.println("Control: " + control + " Distance: " + distance);
-            
         }
-        
     }
 }
+
+//class IRSensor extends Thread
+//{
+//    EV3IRSensor ir = new EV3IRSensor(SensorPort.S4);
+//    SampleProvider sp = ir.getDistanceMode();
+//    public int control = 0;
+//    public int distance = 255;
+//
+//    IRSensor()
+//    {
+//
+//    }
+//    
+//    public void run()
+//    {
+//        while (true)
+//        {
+//            float [] sample = new float[sp.sampleSize()];
+//            control = ir.getRemoteCommand(0);
+//            sp.fetchSample(sample, 0);
+//            distance = (int)sample[0];
+//            System.out.println("Control: " + control + " Distance: " + distance);
+//            
+//        }
+//        
+//    }
+//}
 
 class DriveForward implements Behavior
 {
@@ -169,7 +227,7 @@ class DriveForward implements Behavior
     {
       //EV3BumperCar.leftMotor.forward();
       //EV3BumperCar.rightMotor.forward();
-        switch(EV3BumperCar.sensor.control)
+        switch(EV3BumperCar.sonar.control)
         {
         case 0:
             EV3BumperCar.leftMotor.setSpeed(400);
@@ -217,14 +275,14 @@ class DetectWall implements Behavior
   public DetectWall()
   {
     //touch = new TouchSensor(SensorPort.S1);
-    //sonar = new UltrasonicSensor(SensorPort.S3);
+//    sonar = new EV3UltrasonicSensor(SensorPort.S3);
   }
   
   
   private boolean checkDistance()
   {
 
-      int dist = EV3BumperCar.sensor.distance;
+	  float dist = EV3BumperCar.sonar.distance;
       if (dist < 30)
       {
           Button.LEDPattern(2);
