@@ -15,22 +15,13 @@ import lejos.robotics.filter.MeanFilter;
 import lejos.robotics.subsumption.Arbitrator;
 import lejos.robotics.subsumption.Behavior;
 
-/**
- * Demonstration of the Behavior subsumption classes.
- * 
- * Requires a wheeled vehicle with two independently controlled
- * motors connected to motor ports B and C, and 
- * an EV3 IR sensor connected to port 4;
- * 
- * @author Brian Bagnall and Lawrie Griffiths, modified by Roger Glassey
- *
- */
+
 public class EV3BumperCar
 {
     //static RegulatedMotor leftMotor = MirrorMotor.invertMotor(Motor.A);
     //static RegulatedMotor rightMotor = MirrorMotor.invertMotor(Motor.B);
-    static RegulatedMotor leftMotor = Motor.B;
-    static RegulatedMotor rightMotor = Motor.C;
+    static RegulatedMotor leftMotor = Motor.A;
+    static RegulatedMotor rightMotor = Motor.D;
 //    static IRSensor sensor;
     static UltrasonicSensor sonar;
   
@@ -77,33 +68,67 @@ public class EV3BumperCar
   
   public static void main(String[] args)
   {
-	    
+	  MapStageEngine engine = new MapStageEngine();
+	  engine.makeProgress();
 	  
-	  	leftMotor.resetTachoCount();
-	    rightMotor.resetTachoCount();
-	    leftMotor.rotateTo(0);
-		rightMotor.rotateTo(0);	
-		
-		leftMotor.setSpeed(400);
-	    rightMotor.setSpeed(400);
-	    leftMotor.setAcceleration(800);
-	    rightMotor.setAcceleration(800);
-	      
-	    sonar = new UltrasonicSensor();
-	    sonar.setDaemon(true);
-	    sonar.start();
-	    
-	    Behavior b1 = new DriveForward();
-	    Behavior b2 = new DetectWall();
-	    Behavior[] behaviorList =
-	    {
-	      b1, b2
-	    };
-	    Arbitrator arbitrator = new Arbitrator(behaviorList);
-	    LCD.drawString("Bumper Car",0,1);
-	    Button.LEDPattern(6);
-	    Button.waitForAnyPress();
-	    arbitrator.go();
+	  	
+  }
+  
+  
+  static class MapStageEngine {
+	  int currentStage = 0;
+	  public MapStageEngine() {
+	  }
+	  
+	  public void completeStage() {
+		  currentStage++;
+	  }
+	  
+	  public void makeProgress() {
+		  switch(currentStage) {
+		  	case 0:
+		  		leftMotor.resetTachoCount();
+			    rightMotor.resetTachoCount();
+			    leftMotor.rotateTo(0);
+				rightMotor.rotateTo(0);	
+				
+				leftMotor.setSpeed(400);
+			    rightMotor.setSpeed(400);
+			    leftMotor.setAcceleration(800);
+			    rightMotor.setAcceleration(800);
+			      
+			    sonar = new UltrasonicSensor();
+			    sonar.setDaemon(true);
+			    sonar.start();
+			    
+			    Button.waitForAnyPress();
+			    
+			    leftMotor.forward();
+			    rightMotor.forward();
+			    
+			    while ( sonar.distance > 5 ) {
+			    	continue;
+			    }
+			    
+			    rightMotor.stop(true);
+			    leftMotor.stop(true);
+			    
+			    
+//			    Behavior b1 = new DriveForward();
+//			    Behavior b2 = new DetectWall();
+//			    Behavior[] behaviorList =
+//			    {
+//			      b1, b2
+//			    };
+//			    Arbitrator arbitrator = new Arbitrator(behaviorList);
+//			    LCD.drawString("Bumper Car",0,1);
+//			    Button.LEDPattern(6);
+//			    Button.waitForAnyPress();
+//			    arbitrator.go();
+		  	case 1:
+		  }
+	  }
+	 
   }
     
 //  public static void main2(String[] args)
@@ -139,8 +164,8 @@ class UltrasonicSensor extends Thread
 	EV3UltrasonicSensor uSensor = new EV3UltrasonicSensor(SensorPort.S4);
     SampleProvider sampleProvider = uSensor.getDistanceMode();
     SampleProvider average = new MeanFilter(sampleProvider, 5);
-    public int control = 0;
-    public float distance = 255;
+    public int control = 1;
+    public float distance = 20;
 
     UltrasonicSensor()
     {
@@ -153,9 +178,13 @@ class UltrasonicSensor extends Thread
         while (true)
         {
         	average.fetchSample(sample, 0);
-            distance = (float)sample[0];
-            System.out.println("Control: " + control + " Distance: " + distance);
-        }
+            distance = convertMetersToInches((float)sample[0]);
+            System.out.println(" Distance: " + distance + "in" );
+        }  
+    }
+    
+    public float convertMetersToInches(float meters) {
+    	return meters * 39.370f;
     }
 }
 
@@ -283,7 +312,7 @@ class DetectWall implements Behavior
   {
 
 	  float dist = EV3BumperCar.sonar.distance;
-      if (dist < 30)
+      if (dist < 5)
       {
           Button.LEDPattern(2);
           return true;
