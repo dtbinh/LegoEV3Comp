@@ -7,6 +7,8 @@ import lejos.hardware.lcd.GraphicsLCD;
 import lejos.hardware.lcd.LCD;
 import lejos.hardware.motor.Motor;
 import lejos.hardware.port.SensorPort;
+import lejos.hardware.sensor.EV3ColorSensor;
+import lejos.hardware.sensor.EV3GyroSensor;
 import lejos.hardware.sensor.EV3IRSensor;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.robotics.RegulatedMotor;
@@ -22,8 +24,13 @@ public class EV3BumperCar
     //static RegulatedMotor rightMotor = MirrorMotor.invertMotor(Motor.B);
     static RegulatedMotor leftMotor = Motor.A;
     static RegulatedMotor rightMotor = Motor.D;
+    
+    static RegulatedMotor sonarMotor = Motor.B;
+    
 //    static IRSensor sensor;
     static UltrasonicSensor sonar;
+    static GryroSensor gyro;
+    static boolean running = true;
   
   // Use these definitions instead if your motors are inverted
   // static RegulatedMotor leftMotor = MirrorMotor.invertMotor(Motor.A);
@@ -85,49 +92,203 @@ public class EV3BumperCar
 	  }
 	  
 	  public void makeProgress() {
+		  boolean allowYeilds = true;
 		  switch(currentStage) {
 		  	case 0:
+		  		running = true;
 		  		leftMotor.resetTachoCount();
 			    rightMotor.resetTachoCount();
 			    leftMotor.rotateTo(0);
 				rightMotor.rotateTo(0);	
 				
-				leftMotor.setSpeed(400);
-			    rightMotor.setSpeed(400);
-			    leftMotor.setAcceleration(800);
-			    rightMotor.setAcceleration(800);
+				
 			      
 			    sonar = new UltrasonicSensor();
 			    sonar.setDaemon(true);
 			    sonar.start();
 			    
+			    gyro = new GryroSensor();
+			    gyro.setDaemon(true);
+			    gyro.start();
+			    
+			    LCD.drawString("Booom! Lets rock this!",0,1);
 			    Button.waitForAnyPress();
+			    gyro.resetGyro();
 			    
-			    leftMotor.forward();
-			    rightMotor.forward();
+			    forwardUntil6InchesFromWall(allowYeilds);
+
 			    
-			    while ( sonar.distance > 5 ) {
-			    	continue;
-			    }
-			    
-			    rightMotor.stop(true);
-			    leftMotor.stop(true);
-			    
-			    
-//			    Behavior b1 = new DriveForward();
-//			    Behavior b2 = new DetectWall();
-//			    Behavior[] behaviorList =
-//			    {
-//			      b1, b2
-//			    };
-//			    Arbitrator arbitrator = new Arbitrator(behaviorList);
-//			    LCD.drawString("Bumper Car",0,1);
-//			    Button.LEDPattern(6);
-//			    Button.waitForAnyPress();
-//			    arbitrator.go();
 		  	case 1:
+		  		// entering our first turn... woot woot.
+		  		turnRight90(allowYeilds);
+				forwardUntil6InchesFromWall(allowYeilds);
+				turnRight90(allowYeilds);
+				
+		  	case 2:
+		  		// second straight away
+		  		forwardUntilBlackTape(allowYeilds);
+		  		turnLeft90(allowYeilds);
+		  		
+		  		// go threw the gap
+		  		forwardUntil6InchesFromWall(allowYeilds);
+		  		turnRight90(allowYeilds);
+		  		
+		  		// 2nd to last straight away
+		  		forwardUntil6InchesFromWall(allowYeilds);
+		  		turnLeft90(allowYeilds);
+		  		
+		  		forwardUntil6InchesFromWall(allowYeilds);
+		  		turnLeft90(allowYeilds);
+		  		forwardUntil6InchesFromWall(allowYeilds);
 		  }
 	  }
+	  
+	private void endApp() {
+		// TODO Auto-generated method stub
+		Button.waitForAnyPress();
+  		running = false;
+	}
+
+	private void forwardUntilBlackTape(boolean allowYields) {
+		
+		ColorSensor c = new ColorSensor();
+		c.setDaemon(true);
+	    c.start();
+		
+		setForwardSlow();
+		leftMotor.forward();
+		rightMotor.forward();
+		
+		while(!c.hasSeenBlackColor){
+			if (allowYields) Thread.yield();
+			continue;
+		}
+		
+		rightMotor.stop(true);
+		leftMotor.stop(true);
+	}
+
+	private void forwardUntil6InchesFromWall(boolean allowYeilds) {
+		setForwardSpeed();
+		leftMotor.forward();
+		rightMotor.forward();
+		
+		boolean hasSlowedDown = false;
+		while ( sonar.distance > 7 ) {
+			if (sonar.distance < 12 && !hasSlowedDown) {
+				hasSlowedDown = true;
+				setForwardSlow();
+				leftMotor.forward();
+			    rightMotor.forward();
+			}
+			
+			if (allowYeilds) Thread.yield();
+			continue;
+		}
+		
+		rightMotor.stop(true);
+		leftMotor.stop(true);
+	}
+
+	private void turnRight90(boolean allowYeilds) {
+		setTurnSpeedFast();
+  		leftMotor.forward();
+		rightMotor.backward();
+		
+		boolean hasChangedSpeeds = false;
+		while (gyro.angle > -90f) {
+			if (gyro.angle < -45 && !hasChangedSpeeds) {
+				hasChangedSpeeds = true;
+				setTurnSpeedSlow();
+				leftMotor.forward();
+				rightMotor.backward();
+			}
+			if (allowYeilds) Thread.yield();
+			continue;
+		}
+		
+		rightMotor.stop(true);
+		leftMotor.stop(true);
+		
+		if (gyro.angle <= -90.1) {
+			setTurnSpeedSuperSlow();
+			leftMotor.backward();
+			rightMotor.forward();
+			while (gyro.angle < -90f) {
+				if (allowYeilds) Thread.yield();
+				continue;
+			}
+			
+			rightMotor.stop(true);
+			leftMotor.stop(true);
+		}
+		
+		gyro.resetGyro();
+	}
+	
+	private void turnLeft90(boolean allowYeilds) {
+		setTurnSpeedFast();
+  		rightMotor.forward();
+		leftMotor.backward();
+		
+		boolean hasChangedSpeeds = false;
+		while (gyro.angle < 90f) {
+			if (gyro.angle > 45 && !hasChangedSpeeds) {
+				hasChangedSpeeds = true;
+				setTurnSpeedSlow();
+				rightMotor.forward();
+				leftMotor.backward();
+			}
+			if (allowYeilds) Thread.yield();
+			continue;
+		}
+		
+		rightMotor.stop(true);
+		leftMotor.stop(true);
+		
+		if (gyro.angle >= 90.1) {
+			setTurnSpeedSuperSlow();
+			rightMotor.backward();
+			leftMotor.forward();
+			while (gyro.angle > 90f) {
+				if (allowYeilds) Thread.yield();
+				continue;
+			}
+			
+			rightMotor.stop(true);
+			leftMotor.stop(true);
+		}
+		
+		gyro.resetGyro();
+	}
+
+	private void setForwardSpeed() {
+		leftMotor.setSpeed(1000);
+		rightMotor.setSpeed(1000);
+		leftMotor.setAcceleration(1000);
+		rightMotor.setAcceleration(1000);
+	}
+	private void setForwardSlow() {
+		leftMotor.setSpeed(400);
+		rightMotor.setSpeed(400);
+		leftMotor.setAcceleration(1000);
+		rightMotor.setAcceleration(1000);
+	}
+	
+	private void setTurnSpeedFast() {
+		leftMotor.setSpeed(200);
+		rightMotor.setSpeed(200);
+	}
+	
+	private void setTurnSpeedSlow() {
+		leftMotor.setSpeed(40);
+		rightMotor.setSpeed(40);
+	}
+	
+	private void setTurnSpeedSuperSlow() {
+		leftMotor.setSpeed(20);
+		rightMotor.setSpeed(20);
+	}
 	 
   }
     
@@ -166,25 +327,95 @@ class UltrasonicSensor extends Thread
     SampleProvider average = new MeanFilter(sampleProvider, 5);
     public int control = 1;
     public float distance = 20;
+    public boolean enableLogging = false;
 
-    UltrasonicSensor()
-    {
-
-    }
+    UltrasonicSensor() { }
     
     public void run()
     {
     	float [] sample = new float[average.sampleSize()];
-        while (true)
+        while (EV3BumperCar.running)
         {
         	average.fetchSample(sample, 0);
             distance = convertMetersToInches((float)sample[0]);
-            System.out.println(" Distance: " + distance + "in" );
+            if (enableLogging) {
+            	System.out.println(" Distance: " + distance + "in" );
+            }
+            Thread.yield();
         }  
+        
+        uSensor.close();
     }
     
     public float convertMetersToInches(float meters) {
     	return meters * 39.370f;
+    }
+}
+
+class GryroSensor extends Thread
+{
+	EV3GyroSensor gyroSensor = new EV3GyroSensor(SensorPort.S1);
+	SampleProvider sampleProvider = gyroSensor.getAngleMode();
+    SampleProvider average = new MeanFilter(sampleProvider, 5);
+    public float angle = 0;
+    public boolean enableLogging = false;
+
+    GryroSensor() { }
+    
+    public void resetGyro() {
+    	gyroSensor.reset();
+    }
+    
+    public void run()
+    {
+    	gyroSensor.reset();
+    	float [] sample = new float[average.sampleSize()];
+        while (EV3BumperCar.running)
+        {
+        	average.fetchSample(sample, 0);
+        	angle = (float)sample[0];
+        	if (enableLogging) {
+        		System.out.println(" GyroAngle: " + angle);
+        	}
+        	Thread.yield();
+        }
+        gyroSensor.close();
+    }
+}
+
+class ColorSensor extends Thread
+{
+	EV3ColorSensor colorSensor = new EV3ColorSensor(SensorPort.S3);
+	SampleProvider sampleProvider = colorSensor.getMode("RGB");
+   
+	public boolean hasSeenBlackColor = false;
+    public boolean enableLogging = false;
+
+    ColorSensor() { }
+      
+    public void run()
+    {
+    	float [] sample = new float[sampleProvider.sampleSize()];
+        while (true)
+        {
+        	sampleProvider.fetchSample(sample, 0);
+        	boolean allBelow = true;
+        	for(int i = 0; i < sample.length; i++) {
+        		float color = sample[i];
+        		if (color >= .1f) {
+        			allBelow = false;
+        			break;
+        		}
+        	}
+        	
+        	if (allBelow) {
+        		hasSeenBlackColor = true;
+        		break;
+        	}
+        	
+        	Thread.yield();
+        }
+        colorSensor.close();
     }
 }
 
